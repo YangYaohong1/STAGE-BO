@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moo-constraints-method"
+version = "0.1.0"
+description = "Clean export of the preference-based and constrained MOBO method."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "botorch>=0.12",
+  "gpytorch>=1.13",
+  "numpy>=1.24",
+  "pymoo>=0.6",
+  "torch>=2.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
