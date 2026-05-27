@@ -1,19 +1,22 @@
+"""Wrappers around constrained real-world multi-objective benchmark problems."""
+
 import torch
-from moo_constraints.problems.objective_function import ObjectiveFunction
-from moo_constraints.problems.reference_points import ref_points
-from moo_constraints.problems.reproblem import CRE21 as Source_ConTwoBarTrussDesign
-from moo_constraints.problems.reproblem import CRE22 as Source_ConWeldedBeamDesign
-from moo_constraints.problems.reproblem import CRE23 as Source_ConDiscBrakeDesign
-from moo_constraints.problems.reproblem import CRE24 as Source_ConSpeedReducerDesign
-from moo_constraints.problems.reproblem import CRE25 as Source_ConGearTrainDesign
-from moo_constraints.problems.reproblem import CRE31 as Source_ConCarSideImpactDesign
-from moo_constraints.problems.reproblem import CRE32 as Source_ConMarineDesign
-from moo_constraints.problems.reproblem import CRE51 as Source_ConWaterResourcePlanning
+from .objective_function import ObjectiveFunction
+from .reference_points import ref_points
+from .reproblem import CRE21 as Source_ConTwoBarTrussDesign
+from .reproblem import CRE22 as Source_ConWeldedBeamDesign
+from .reproblem import CRE23 as Source_ConDiscBrakeDesign
+from .reproblem import CRE24 as Source_ConSpeedReducerDesign
+from .reproblem import CRE25 as Source_ConGearTrainDesign
+from .reproblem import CRE31 as Source_ConCarSideImpactDesign
+from .reproblem import CRE32 as Source_ConMarineDesign
+from .reproblem import CRE51 as Source_ConWaterResourcePlanning
 
 import torch
 import numpy as np
 
 class BaseCREProblem(ObjectiveFunction):
+    """Normalize a constrained benchmark to the common STAGE-BO interface."""
     def __init__(self, base_name, core_function, **kwargs):
         self.core_function = core_function
         self.dim = core_function.n_variables

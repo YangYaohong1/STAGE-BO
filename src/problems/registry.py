@@ -1,3 +1,5 @@
+"""Problem registry for benchmark and real-world STAGE-BO test cases."""
+
 import numpy as np
 import torch
 from botorch.test_functions.base import MultiObjectiveTestProblem
@@ -26,7 +28,7 @@ from botorch.test_functions.multi_objective import (
 )
 from pymoo.problems import get_problem as pymoo_get
 
-from moo_constraints.problems.constrained_realworld import (
+from problems.definitions.constrained_realworld import (
     BaseConCarSideImpactDesign,
     BaseConDiscBrakeDesign,
     BaseConGearTrainDesign,
@@ -35,7 +37,7 @@ from moo_constraints.problems.constrained_realworld import (
     BaseConWaterResourcePlanning,
     BaseConWeldedBeamDesign,
 )
-from moo_constraints.problems.realworld import (
+from problems.definitions.realworld import (
     BaseCarCabDesign,
     BaseCarSideImpact,
     BaseCoilCompressionSpring,
@@ -55,10 +57,11 @@ from moo_constraints.problems.realworld import (
     BaseWaterResourcePlanning,
     BaseWeldedBeam,
 )
-from moo_constraints.runtime import tkwargs
+from runtime import tkwargs
 
 
 class PymooWrapper(MultiObjectiveTestProblem):
+    """Adapt a pymoo problem so it behaves like a BoTorch test problem."""
     def __init__(self, pymoo_problem_instance, negate=True):
         self.pymoo_problem = pymoo_problem_instance
         self.dim = self.pymoo_problem.n_var
@@ -79,6 +82,7 @@ class PymooWrapper(MultiObjectiveTestProblem):
 
 
 def get_test_problem(name: str):
+    """Return a configured benchmark problem by its public registry name."""
     if name == "DTLZ2_2_5":
         return DTLZ2(dim=5, num_objectives=2, negate=True).to(**tkwargs)
     if name == "DTLZ2_2_3":

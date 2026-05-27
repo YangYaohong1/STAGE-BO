@@ -1,6 +1,6 @@
 import torch
 
-from moo_constraints.algorithms.constraint_selection import select_constraint_via_maxmin
+from algorithms.constraint_selection import select_constraint_via_maxmin
 
 
 def test_select_constraint_via_maxmin_shapes():

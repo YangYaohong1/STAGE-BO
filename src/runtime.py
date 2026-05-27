@@ -1,3 +1,5 @@
+"""Shared runtime settings such as device and default tensor dtype."""
+
 import torch
 
 

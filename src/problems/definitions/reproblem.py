@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 """
-  A real-world multi-objective problem suite (the RE benchmark set) 
+  Real-world multi-objective problem suite (the RE benchmark set).
+
   Reference:
   Ryoji Tanabe, Hisao Ishibuchi, "An Easy-to-use Real-world Multi-objective Problem Suite" Applied Soft Computing. 89: 106078 (2020)
    Copyright (c) 2020 Ryoji Tanabe
-
-  I re-implemented the RE problem set by referring to its C source code (reproblem.c). While variables directly copied from the C source code are written in CamelCase, the other variables are written in snake_case. It is somewhat awkward.
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by

@@ -1,3 +1,5 @@
+"""Gaussian process model utilities used by the solver."""
+
 import gpytorch
 import torch
 from botorch.fit import fit_gpytorch_mll
@@ -8,6 +10,7 @@ from gpytorch.mlls.sum_marginal_log_likelihood import SumMarginalLogLikelihood
 
 
 def fit_model_list(train_x: torch.Tensor, train_y: torch.Tensor) -> ModelListGP:
+    """Fit one independent GP per output dimension and return a ModelListGP."""
     models = []
     x = train_x.to(dtype=torch.float64)
     y = train_y.to(dtype=torch.float64)

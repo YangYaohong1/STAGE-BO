@@ -1,3 +1,5 @@
+"""Core STAGE-BO utilities for unconstrained and preference-based settings."""
+
 import random
 
 import numpy as np
@@ -17,6 +19,7 @@ from pymoo.termination.max_gen import MaximumGenerationTermination
 
 
 def set_all_seeds(seed: int) -> None:
+    """Seed Python, NumPy, and PyTorch for reproducible NSGA-II runs."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -25,13 +28,15 @@ def set_all_seeds(seed: int) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-class PreferenceMOBO:
+class PreferenceStageBO:
+    """Helper methods for unconstrained and preference-based STAGE-BO."""
     def __init__(self, problem, noise_se, seed=1):
         self.problem = problem
         self.noise_se = noise_se
         self.seed = seed
 
     def generate_initial_data(self, n=4):
+        """Draw Sobol initial points and evaluate noisy objectives."""
         train_x = draw_sobol_samples(bounds=self.problem.bounds, n=n, q=1, seed=self.seed).squeeze(1)
         train_obj_true = self.problem(train_x)
         train_obj = train_obj_true + torch.randn_like(train_obj_true) * self.noise_se
@@ -39,6 +44,7 @@ class PreferenceMOBO:
         return train_x, torch.round(train_obj, decimals=2), torch.round(train_obj_true, decimals=2)
 
     def get_true_pareto_nsga2(self, population_size=500, max_gen=100):
+        """Approximate the true Pareto front of the underlying test problem."""
         local_tkwargs = {
             "dtype": self.problem.ref_point.dtype,
             "device": self.problem.ref_point.device,
@@ -83,6 +89,7 @@ class PreferenceMOBO:
         seed=42,
         preference_region=None,
     ):
+        """Extract a Pareto front from the model posterior or a Thompson sample."""
         local_tkwargs = {
             "dtype": self.problem.ref_point.dtype,
             "device": self.problem.ref_point.device,
@@ -142,6 +149,8 @@ class PreferenceMOBO:
             raise RuntimeError(f"Expected posterior tensor to be 2D, got shape {tuple(preds.shape)}")
 
         if preference_region is not None:
+            # Preference mode keeps Pareto points inside the region if possible,
+            # then backs off to partial overlap, and finally to the full front.
             region = torch.tensor(preference_region, **local_tkwargs)
             feasible_mask = (preds >= region[0]).all(dim=-1) | (preds <= region[1]).all(dim=-1)
             preds_feasible = preds[feasible_mask]

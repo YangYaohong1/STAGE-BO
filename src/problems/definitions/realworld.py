@@ -1,27 +1,30 @@
+"""Wrappers around unconstrained real-world multi-objective benchmark problems."""
+
 import torch
-from moo_constraints.problems.objective_function import ObjectiveFunction
-from moo_constraints.problems.reference_points import ref_points
-from moo_constraints.problems.reproblem import CRE32 as Source_ConMarineDesign
-from moo_constraints.problems.reproblem import Knee1 as Source_Knee1
-from moo_constraints.problems.reproblem import Knee5 as Source_Knee5
-from moo_constraints.problems.reproblem import RE21 as Source_FourBarTruss
-from moo_constraints.problems.reproblem import RE22 as Source_ReinforcedConcreteBeam
-from moo_constraints.problems.reproblem import RE23 as Source_PressureVessel
-from moo_constraints.problems.reproblem import RE24 as Source_HatchCover
-from moo_constraints.problems.reproblem import RE25 as Source_CoilCompressionSpring
-from moo_constraints.problems.reproblem import RE31 as Source_TwoBarTruss
-from moo_constraints.problems.reproblem import RE32 as Source_WeldedBeam
-from moo_constraints.problems.reproblem import RE33 as Source_DiscBrake
-from moo_constraints.problems.reproblem import RE34 as Source_VehicleDesign
-from moo_constraints.problems.reproblem import RE35 as Source_SpeedReducer
-from moo_constraints.problems.reproblem import RE36 as Source_GearTrain
-from moo_constraints.problems.reproblem import RE37 as Source_RocketInjector
-from moo_constraints.problems.reproblem import RE41 as Source_CarSideImpact
-from moo_constraints.problems.reproblem import RE42 as Source_ConceptualMarineDesign
-from moo_constraints.problems.reproblem import RE61 as Source_WaterResourcePlanning
-from moo_constraints.problems.reproblem import RE91 as Source_CarCabDesign
+from .objective_function import ObjectiveFunction
+from .reference_points import ref_points
+from .reproblem import CRE32 as Source_ConMarineDesign
+from .reproblem import Knee1 as Source_Knee1
+from .reproblem import Knee5 as Source_Knee5
+from .reproblem import RE21 as Source_FourBarTruss
+from .reproblem import RE22 as Source_ReinforcedConcreteBeam
+from .reproblem import RE23 as Source_PressureVessel
+from .reproblem import RE24 as Source_HatchCover
+from .reproblem import RE25 as Source_CoilCompressionSpring
+from .reproblem import RE31 as Source_TwoBarTruss
+from .reproblem import RE32 as Source_WeldedBeam
+from .reproblem import RE33 as Source_DiscBrake
+from .reproblem import RE34 as Source_VehicleDesign
+from .reproblem import RE35 as Source_SpeedReducer
+from .reproblem import RE36 as Source_GearTrain
+from .reproblem import RE37 as Source_RocketInjector
+from .reproblem import RE41 as Source_CarSideImpact
+from .reproblem import RE42 as Source_ConceptualMarineDesign
+from .reproblem import RE61 as Source_WaterResourcePlanning
+from .reproblem import RE91 as Source_CarCabDesign
 
 class BaseREProblem(ObjectiveFunction):
+    """Normalize a real-world benchmark to the common STAGE-BO interface."""
     def __init__(self, base_name, core_function, **kwargs):
         super().__init__(dim=core_function.n_variables, num_objectives=core_function.n_objectives, num_constraints=core_function.n_constraints)
         self.core_function = core_function

@@ -1,3 +1,5 @@
+"""Quality indicators for comparing observed and reference Pareto fronts."""
+
 import numpy as np
 import torch
 from numpy import mean, sqrt, sum
@@ -7,6 +9,7 @@ from numpy.linalg import norm
 class Metrics:
     @staticmethod
     def inverted_generational_distance(pareto_front: torch.Tensor, reference_front: torch.Tensor) -> float:
+        """Compute IGD from the observed Pareto front to the reference front."""
         rf_size = len(reference_front)
         igd = 0.0
         for point in reference_front:
@@ -16,6 +19,7 @@ class Metrics:
 
     @staticmethod
     def igd_plus(pareto_front: torch.Tensor, reference_front: torch.Tensor) -> float:
+        """Compute IGD+ using the standard non-improving directional distance."""
         rf_size = len(reference_front)
         igd_plus = 0.0
         for point in reference_front:
@@ -25,6 +29,7 @@ class Metrics:
 
     @staticmethod
     def fill_distance(pareto_front: torch.Tensor, reference_front: torch.Tensor) -> float:
+        """Measure the largest gap from the reference front to the observed front."""
         distances = np.zeros(len(reference_front))
         for idx, point in enumerate(reference_front):
             distances[idx] = min(norm(candidate - point) for candidate in pareto_front)
@@ -32,6 +37,7 @@ class Metrics:
 
     @staticmethod
     def spacing(pareto_front: torch.Tensor) -> float:
+        """Measure how evenly spaced the observed Pareto points are."""
         pf_size = len(pareto_front)
         if pf_size <= 1:
             return 1.0

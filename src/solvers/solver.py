@@ -1,9 +1,10 @@
+"""Main STAGE-BO optimization loop and output handling."""
+
 import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-import gpytorch
 import numpy as np
 import torch
 from botorch.acquisition import qLogNoisyExpectedImprovement
@@ -12,71 +13,66 @@ from botorch.optim import optimize_acqf
 from botorch.utils.multi_objective.box_decompositions.dominated import DominatedPartitioning
 from botorch.utils.multi_objective.pareto import is_non_dominated
 from botorch.utils.transforms import unnormalize
-from torch.quasirandom import SobolEngine
 
-from moo_constraints.algorithms.constrained_mobo import ConstrainedMOBO
-from moo_constraints.algorithms.constraint_selection import select_constraint_via_maxmin
-from moo_constraints.algorithms.metrics import Metrics
-from moo_constraints.algorithms.mobo import PreferenceMOBO
-from moo_constraints.algorithms.scbo import ScboState, generate_batch, update_state
-from moo_constraints.config import MethodConfig
-from moo_constraints.models.gp import fit_model_list
-from moo_constraints.runtime import tkwargs
+from algorithms.constrained_stage_bo import ConstrainedStageBO
+from algorithms.constraint_selection import select_constraint_via_maxmin
+from algorithms.metrics import Metrics
+from algorithms.stage_bo import PreferenceStageBO
+from config import MethodConfig
+from models.gp import fit_model_list
+from runtime import tkwargs
 
 
 class MethodSolver:
+    """Run STAGE-BO for unconstrained, preference-based, or constrained problems."""
     def __init__(self, problem, config: MethodConfig):
         self.problem = problem
         self.config = config
         self.config.validate()
         self.noise_se = torch.tensor([config.noise] * self.problem.num_objectives, **tkwargs)
-        self.preference_mobo = PreferenceMOBO(problem, self.noise_se, seed=config.seed)
-        self.constrained_mobo = ConstrainedMOBO(problem, self.noise_se, seed=config.seed)
+        self.preference_stage_bo = PreferenceStageBO(problem, self.noise_se, seed=config.seed)
+        self.constrained_stage_bo = ConstrainedStageBO(problem, self.noise_se, seed=config.seed)
         self.output_dir = self._make_output_dir(config.output_dir)
         self.true_pareto_front, self.true_pareto_x = self._get_true_pareto_front()
 
     def solve(self) -> dict:
+        """Execute the sequential BO loop and persist run artifacts."""
         if self.config.mode == "constrained":
-            train_x, train_obj, train_con = self.constrained_mobo.generate_initial_data(
+            train_x, train_obj, train_con = self.constrained_stage_bo.generate_initial_data(
                 n=self.config.initial_points or 2 * (self.problem.dim + 1)
             )
         else:
-            train_x, train_obj, _ = self.preference_mobo.generate_initial_data(
+            train_x, train_obj, _ = self.preference_stage_bo.generate_initial_data(
                 n=self.config.initial_points or 2 * (self.problem.dim + 1)
             )
             train_con = None
 
         history = []
-        state = ScboState(self.problem.dim, batch_size=1)
-        sobol = SobolEngine(self.problem.dim, scramble=True, seed=self.config.seed)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         for iteration in range(1, self.config.steps + 1):
-            observed_front, _ = self._get_observed_front(train_x, train_obj, train_con)
-            metrics = self._compute_metrics(observed_front)
             posterior_model = self._fit_posterior_model(train_x, train_obj, train_con)
 
             posterior_mean_list = []
-            posterior_x_list = []
             for sample_idx in range(self.config.num_ts_samples):
                 if self.config.mode == "constrained":
-                    _, post_mean, post_x = self.constrained_mobo.get_pareto_constrained_nsga2(
+                    _, post_mean, _ = self.constrained_stage_bo.get_pareto_constrained_nsga2(
                         posterior_model,
                         ThompsonSampling=self.config.thompson_sampling,
                         seed=sample_idx,
                     )
                 else:
-                    _, _, post_mean, post_x = self.preference_mobo.get_pareto_nsga2(
+                    _, _, post_mean, _ = self.preference_stage_bo.get_pareto_nsga2(
                         posterior_model,
                         ThompsonSampling=self.config.thompson_sampling,
                         seed=sample_idx,
                         preference_region=self.config.preference_region,
                     )
                 posterior_mean_list.append(post_mean)
-                posterior_x_list.append(post_x)
 
             stacked_posterior_mean = torch.stack(posterior_mean_list)
-            stacked_posterior_x = torch.stack(posterior_x_list)
+            # Pick the next adaptive epsilon-constraint by targeting the largest
+            # geometric gap between the sampled Pareto front and observed points.
             constraint_values, _, _, objective_index = select_constraint_via_maxmin(
                 posterior_pareto_front=stacked_posterior_mean[0][:, : self.problem.num_objectives],
                 train_obj=train_obj,
@@ -97,41 +93,11 @@ class MethodSolver:
             full_bounds = self._augment_bounds_for_constraints(constraint_values, train_con)
             full_bounds = self._relax_bounds_if_needed(aux_targets, full_bounds)
 
-            objective_train_y = train_obj[:, objective_index].unsqueeze(-1)
-            objective_model = fit_model_list(train_x, objective_train_y)
-            constraint_model = fit_model_list(train_x, full_bounds - aux_targets)
-
-            if iteration > 1:
-                state = update_state(
-                    state=state,
-                    Y_all=objective_train_y,
-                    C_all=full_bounds - aux_targets,
-                    Y_next=objective_train_y,
-                    C_next=full_bounds - aux_targets,
-                )
-
-            posterior_aux = self._extract_aux_outputs(stacked_posterior_mean, objective_index)
-            posterior_scalar_y = self._posterior_objective_values(stacked_posterior_mean, objective_index)
-            with gpytorch.settings.cholesky_jitter(1e-3):
-                _, _, centers, length = generate_batch(
-                    state=state,
-                    model=objective_model,
-                    X=stacked_posterior_x,
-                    Y=posterior_scalar_y.unsqueeze(-1),
-                    C=full_bounds - posterior_aux,
-                    batch_size=1,
-                    n_candidates=2000,
-                    constraint_model=constraint_model,
-                    sobol=sobol,
-                )
-
             x_next = self._optimize_inner_acquisition(
                 posterior_model=posterior_model,
                 train_x=train_x,
                 objective_index=objective_index,
                 full_bounds=full_bounds,
-                center=centers[0],
-                length=length,
             )
 
             new_obj_true = torch.round(self.problem(unnormalize(x_next, self.problem.bounds)), decimals=2)
@@ -143,6 +109,9 @@ class MethodSolver:
                 new_con = torch.round(self.problem.evaluate_slack(unnormalize(x_next, self.problem.bounds)), decimals=2)
                 train_con = torch.cat([train_con, new_con], dim=0)
 
+            observed_front, _ = self._get_observed_front(train_x, train_obj, train_con)
+            metrics = self._compute_metrics(observed_front)
+
             history.append(
                 {
                     "iteration": iteration,
@@ -150,6 +119,18 @@ class MethodSolver:
                     "constraint_values": [float(value) for value in full_bounds.detach().cpu().tolist()],
                     **metrics,
                 }
+            )
+            # Flush per-iteration metrics immediately so long runs can be monitored.
+            print(
+                json.dumps(
+                    {
+                        "iteration": iteration,
+                        "hv": metrics["hv"],
+                        "igd": metrics["igd"],
+                        "igd_plus": metrics["igd_plus"],
+                    }
+                ),
+                flush=True,
             )
 
         self._save_outputs(
@@ -166,16 +147,18 @@ class MethodSolver:
         }
 
     def _make_output_dir(self, root: Path) -> Path:
+        """Create the per-run output directory."""
         output_dir = Path(root) / self.config.mode / self.config.problem / f"seed_{self.config.seed}"
         output_dir.mkdir(parents=True, exist_ok=True)
         return output_dir
 
     def _get_true_pareto_front(self):
+        """Build the reference front used for metrics in the current mode."""
         if self.config.mode == "constrained":
-            return self.constrained_mobo.get_true_pareto_constrained_nsga2()
+            return self.constrained_stage_bo.get_true_pareto_constrained_nsga2()
 
-        pareto_front, pareto_x = self.preference_mobo.get_true_pareto_nsga2()
-        if self.config.preference_region is not None:
+        pareto_front, pareto_x = self.preference_stage_bo.get_true_pareto_nsga2()
+        if self.config.mode == "preference" and self.config.preference_region is not None:
             region = torch.tensor(self.config.preference_region, **tkwargs)
             mask = (pareto_front >= region[0]).all(dim=-1) | (pareto_front <= region[1]).all(dim=-1)
             filtered_front = pareto_front[mask]
@@ -190,10 +173,12 @@ class MethodSolver:
         return pareto_front, pareto_x
 
     def _fit_posterior_model(self, train_x, train_obj, train_con):
+        """Fit one joint posterior model over objectives and optional constraints."""
         train_y = train_obj if train_con is None else torch.cat([train_obj, train_con], dim=-1)
         return fit_model_list(train_x, train_y)
 
     def _get_observed_front(self, train_x, train_obj, train_con):
+        """Extract the current nondominated front, respecting feasibility if needed."""
         if train_con is None:
             mask = is_non_dominated(train_obj)
             return train_obj[mask], train_x[mask]
@@ -209,6 +194,7 @@ class MethodSolver:
         return feasible_obj[mask], feasible_x[mask]
 
     def _compute_metrics(self, observed_front):
+        """Evaluate the observed front against the reference front."""
         if observed_front.shape[0] == 0:
             return {
                 "hv": 0.0,
@@ -227,6 +213,7 @@ class MethodSolver:
         }
 
     def _build_aux_targets(self, train_obj, train_con, objective_index):
+        """Collect all non-optimized outputs to be treated as constraints."""
         objective_mask = torch.arange(train_obj.shape[-1], device=train_obj.device) != objective_index
         aux = train_obj[:, objective_mask]
         if train_con is not None:
@@ -234,11 +221,13 @@ class MethodSolver:
         return aux
 
     def _augment_bounds_for_constraints(self, objective_bounds, train_con):
+        """Append feasibility thresholds for true constraints in constrained mode."""
         if train_con is None:
             return objective_bounds
         return torch.cat([objective_bounds, torch.zeros(train_con.shape[-1], **tkwargs)])
 
     def _relax_bounds_if_needed(self, aux_targets, full_bounds):
+        """Relax impossible bounds so cEI always has a feasible target to optimize."""
         if not self.config.relax_constraints:
             return full_bounds
         feasible = aux_targets >= full_bounds
@@ -248,20 +237,8 @@ class MethodSolver:
             full_bounds[~infeasible_idx] = aux_targets[:, ~infeasible_idx].max(dim=0).values
         return full_bounds
 
-    def _extract_aux_outputs(self, stacked_posterior_mean, objective_index):
-        total_outputs = stacked_posterior_mean.shape[-1]
-        keep_indices = [idx for idx in range(total_outputs) if idx != objective_index]
-        return stacked_posterior_mean[:, :, keep_indices]
-
-    def _posterior_objective_values(self, stacked_posterior_mean, objective_index):
-        objective_values = stacked_posterior_mean[:, :, objective_index]
-        if self.config.mode == "constrained":
-            return objective_values
-        aux = self._extract_aux_outputs(stacked_posterior_mean, objective_index)
-        denom = aux.abs().max(dim=1, keepdim=True).values.clamp_min(1e-8)
-        return objective_values + self.config.epsilon * (aux / denom).sum(dim=-1)
-
-    def _optimize_inner_acquisition(self, posterior_model, train_x, objective_index, full_bounds, center, length):
+    def _optimize_inner_acquisition(self, posterior_model, train_x, objective_index, full_bounds):
+        """Optimize the cEI subproblem over the normalized design domain."""
         total_outputs = self.problem.num_objectives + (
             self.problem.num_constraints if self.config.mode == "constrained" else 0
         )
@@ -289,11 +266,14 @@ class MethodSolver:
             constraints=[constraint_callable],
             objective=objective,
         )
-        tr_lb = torch.clamp(center - length / 2.0, 0.0, 1.0)
-        tr_ub = torch.clamp(center + length / 2.0, 0.0, 1.0)
         candidates, _ = optimize_acqf(
             acq_function=acq_func,
-            bounds=torch.stack([tr_lb, tr_ub]),
+            bounds=torch.stack(
+                [
+                    torch.zeros(self.problem.dim, **tkwargs),
+                    torch.ones(self.problem.dim, **tkwargs),
+                ]
+            ),
             q=1,
             num_restarts=5,
             raw_samples=2048,
@@ -302,6 +282,7 @@ class MethodSolver:
         return candidates.detach()
 
     def _save_outputs(self, timestamp, train_x, train_obj, train_con, history):
+        """Persist raw observations, metrics, and configuration for the run."""
         np.savetxt(self.output_dir / f"{timestamp}_train_x.csv", train_x.detach().cpu().numpy(), delimiter=",")
         np.savetxt(self.output_dir / f"{timestamp}_train_obj.csv", train_obj.detach().cpu().numpy(), delimiter=",")
         np.savetxt(

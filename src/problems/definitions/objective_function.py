@@ -1,6 +1,10 @@
+"""Base interface for problem definitions used in the local registry."""
+
 import numpy as np
 
+
 class ObjectiveFunction:
+    """Minimal base class shared by the real-world problem definitions."""
     def __init__(self, dim: int , num_objectives: int , num_constraints: int):
         self.dim = dim
         self.num_objectives = num_objectives

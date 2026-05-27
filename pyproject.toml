@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "moo-constraints-method"
+name = "STAGE-BO"
 version = "0.1.0"
-description = "Clean export of the preference-based and constrained MOBO method."
+description = "This is the code repository for paper:  Multi-Objective Bayesian Optimization via Adaptive varepsilon-Constraints Decomposition"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

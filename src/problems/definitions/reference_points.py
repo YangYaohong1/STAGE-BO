@@ -1,6 +1,5 @@
-# Predefined reference points for various test functions
-# Need to use similar reference points for all methods to have fair comparison
-# add negative sign for the reference points
+"""Reference points used for hypervolume computation on named problems."""
+
 ref_points = {
     'dtlz1': 400.0,
     'dtlz2': 1.1,
@@ -11,8 +10,6 @@ ref_points = {
     'dtlz7': 15.0,
     'zdt1': 11.0,
     'zdt2': 11.0,
-    # 'zdt2': 1.5,
-    # 'zdt3': 11.0,
     'zdt3': 1,
     'knee1': [-10, -10],
     'knee5': [-10, -10],
@@ -29,12 +26,10 @@ ref_points = {
     'two-bar-truss': [-826.75, -21.58, -826.65],
     'welded-beam': [-261.16, -831.89, -22260629.79],
     'disc-brake': [-7.58, -7.0, -36.98],
-    # 'vehicle-design': [1696.73, 11.87, 0.23], 
     'vehicle-design': [-1864.72022, -11.81993945, -0.2903999384],
     'speed-reducer': [-6735.9, -1761.17, -402.34],
     'gear-train': [-7.4, -64.1, -0.52],
     'rocket-injector': [-0.96, -1.11, -1.08],
-    # 'car-impact': [38.89, 4.44, 12.94, 8.87],
     'car-impact': [-45.4872, -4.5114, -13.3394, -10.3942],
     'marine-design': [210.44, -18970.82, -24111.07, -11.36],
     'water-planning': [-84348.75, -1460.57, -3101483.5, -12442799.73, -67029.71, -1.59],

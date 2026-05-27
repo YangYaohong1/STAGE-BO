@@ -1,3 +1,5 @@
+"""Adaptive epsilon-constraint selection rules used by STAGE-BO."""
+
 import torch
 from botorch.utils.multi_objective.pareto import is_non_dominated
 from botorch.utils.transforms import normalize

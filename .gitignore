@@ -6,3 +6,5 @@ outputs/
 build/
 dist/
 *.egg-info/
+mobo_env/
+tests/
